@@ -19,6 +19,8 @@ static char history[HISTORY_SIZE][MAX_LINE];
 static int history_start = 0;
 static int history_count = 0;
 
+static int exec_single(char *args[], int background);
+
 /* This function removes new line from input. */
 static void trim_newline(char *line) {
     size_t len = strlen(line);
@@ -276,6 +278,26 @@ static int execute_simple_command(char *command, int background) {
         return builtin_result;
     }
 
+    /* ---------- MULTI COMMAND START ---------- */
+    /* Check for -multi-N: remove the token, run N times. */
+    int n = 1;
+    for (int i = 0; args[i] != NULL; i++) {
+        if (strncmp(args[i], "-multi-", 7) == 0) {
+            n = atoi(args[i] + 7);
+            for (int j = i; args[j] != NULL; j++)
+                args[j] = args[j + 1];
+            break;
+        }
+    }
+    if (n < 1) {
+        fprintf(stderr, "Invalid multi command.\n");
+        return 1;
+    }
+    for (int i = 0; i < n; i++)
+        exec_single(args, background);
+    /* ---------- MULTI COMMAND END ---------- */
+    return 0;
+
     pid = fork();
     if (pid < 0) {
         perror("fork");
@@ -495,3 +517,24 @@ int main(void) {
 
     return 0;
 }
+
+static int exec_single(char *args[], int background) {
+    int status;
+    pid_t pid = fork();
+
+    if (pid < 0) { perror("fork"); return 1; }
+    if (pid == 0) { execvp(args[0], args); perror(args[0]); exit(1); }
+    if (background) { printf("%d\n", pid); return 0; }
+    if (waitpid(pid, &status, 0) < 0) { perror("waitpid"); return 1; }
+
+    return WIFEXITED(status) ? WEXITSTATUS(status) : 1;
+}
+
+/*
+ * Compile:
+ *   gcc -Wall -Wextra -std=c99 main.c -o shell322
+ *
+ * Run:
+ *   ./shell322
+ *   shell322> echo hello -multi-3
+ */
