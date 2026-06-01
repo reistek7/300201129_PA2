@@ -495,3 +495,4 @@ int main(void) {
 
     return 0;
 }
+/* This function clears extra spaces. sadsda*/
